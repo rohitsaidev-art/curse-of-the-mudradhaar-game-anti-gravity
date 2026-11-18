@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tantrik vs Daanav: Demon Slayer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Press+Start+2P&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold-primary: #f5b041;
+      --gold-glow: rgba(245, 176, 65, 0.55);
+      --demon-red: #eb3b5a;
+      --demon-glow: rgba(235, 59, 90, 0.75);
+      --bg-dark: #050406;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg-dark);
+      font-family: 'Outfit', sans-serif;
+      color: #f7f1e3;
+    }
+
+    #game-viewport {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: #000;
+    }
+
+    /* Ancient Mossy Temple Cave Background */
+    #cave-backdrop {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(0.72) contrast(1.22) saturate(1.15);
+      z-index: 1;
+      transform: scale(1.02);
+    }
+
+    /* Ambient Vignette & CRT Scanlines */
+    .screen-vignette {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 40;
+      background: radial-gradient(circle at center, transparent 35%, rgba(0, 0, 0, 0.65) 80%, #000 100%),
+                  linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%);
+      background-size: 100% 100%, 100% 4px;
+    }
+
+    /* Red Damage Vignette Flash */
+    #damage-vignette {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 45;
+      background: radial-gradient(circle at center, transparent 25%, rgba(255, 10, 10, 0.55) 75%, rgba(180, 0, 0, 0.95) 100%);
+      opacity: 0;
+      transition: opacity 0.08s ease-out;
+    }
+    #damage-vignette.active {
+      opacity: 1;
+    }
+
+    /* Screen Shake Stage */
+    #shake-stage {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      transform: translate3d(0, 0, 0);
+      will-change: transform;
+    }
+
+    /* Particle VFX Canvas (Fire, Embers, Smoke) */
+    #vfx-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 25;
+    }
+
+    /* Daanav Boss Arena: Firmly Grounded on Cave Floor */
+    #boss-layer {
+      position: absolute;
+      bottom: 16%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: clamp(340px, 38vw, 520px);
+      height: clamp(340px, 38vw, 520px);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      will-change: transform, filter;
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    #boss-ground-shadow {
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      height: 30px;
+      background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0) 70%);
+      pointer-events: none;
+      z-index: 9;
+    }
+
+    #boss-sprite {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 15px 35px rgba(0, 0, 0, 0.9));
+      animation: bossBreathing 3.6s ease-in-out infinite alternate;
+      transform-origin: bottom center;
+    }
+
+    @keyframes bossBreathing {
+      0% {
+        transform: scale(1) translateY(0);
+        filter: drop-shadow(0 15px 30px rgba(0, 0, 0, 0.9)) brightness(1);
+      }
+      100% {
+        transform: scale(1.03) translateY(-8px);
+        filter: drop-shadow(0 25px 45px rgba(235, 59, 90, 0.45)) brightness(1.1);
+      }
+    }
+
+    .boss-flinch {
+      animation: bossHurtFx 0.45s ease-out forwards !important;
+    }
+
+    @keyframes bossHurtFx {
+      0% { transform: scale(1); filter: brightness(3.5) saturate(0) contrast(1.4); }
+      20% { transform: scale(0.92) translate(-25px, 15px); filter: brightness(2) drop-shadow(0 0 50px #f5b041); }
+      45% { transform: scale(0.96) translate(20px, -10px); }
+      100% { transform: scale(1); filter: brightness(1); }
+    }
+
+    .boss-lunge {
+      animation: bossLungeFx 0.55s cubic-bezier(0.1, 0.9, 0.2, 1) forwards !important;
+    }
+
+    @keyframes bossLungeFx {
+      0% { transform: scale(1) translateY(0); }
+      40% { transform: scale(1.5) translateY(90px); filter: brightness(1.8) drop-shadow(0 0 70px #ff0000); }
+      75% { transform: scale(1.2) translateY(30px); }
+      100% { transform: scale(1) translateY(0); }
+    }
+
+    /* Top HUD / Health Bars */
+    #hud-top {
+      position: absolute;
+      top: 24px;
+      left: 36px;
+      right: 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      z-index: 50;
+      pointer-events: none;
+    }
+
+    .hud-card {
+      width: clamp(260px, 32vw, 420px);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      background: rgba(14, 10, 16, 0.75);
+      border: 1px solid rgba(141, 110, 99, 0.4);
+      padding: 10px 16px;
+      border-radius: 10px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+    }
+
+    .hud-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'Cinzel', serif;
+      font-weight: 900;
+      letter-spacing: 2.5px;
+      font-size: clamp(14px, 1.5vw, 18px);
+    }
+
+    .hud-title-row.tantrik {
+      color: var(--gold-primary);
+      text-shadow: 0 0 16px var(--gold-glow);
+    }
+
+    .hud-title-row.daanav {
+      color: var(--demon-red);
+      text-shadow: 0 0 16px var(--demon-glow);
+      text-align: right;
+    }
+
+    .bar-frame {
+      width: 100%;
+      height: 18px;
+      background: rgba(8, 6, 10, 0.95);
+      border: 1.5px solid #5d4037;
+      border-radius: 4px;
+      padding: 2px;
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.95);
+    }
+
+    .bar-fluid {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .bar-fluid.tantrik {
+      background: linear-gradient(90deg, #d35400, #f39c12, #f1c40f);
+      box-shadow: 0 0 14px var(--gold-glow);
+    }
+
+    .bar-fluid.daanav {
+      background: linear-gradient(90deg, #962d22, #c0392b, #eb3b5a);
+      box-shadow: 0 0 14px var(--demon-glow);
+      margin-left: auto;
+    }
+
+    /* Combo Target Dock: Centered Below Daanav, Between Hands */
+    #combo-dock {
+      position: absolute;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      z-index: 50;
+      pointer-events: none;
+    }
+
+    #combo-capsule {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      background: rgba(14, 11, 16, 0.94);
+      border: 2px solid #8d6e63;
+      border-radius: 50px;
+      padding: 8px 32px;
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.95), 0 0 25px rgba(245, 176, 65, 0.25);
+      transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      backdrop-filter: blur(8px);
+    }
+
+    #combo-capsule.match-glow {
+      border-color: #2ed573;
+      box-shadow: 0 0 45px rgba(46, 213, 115, 0.85);
+      transform: scale(1.08);
+    }
+
+    .combo-emoji {
+      font-size: clamp(42px, 4.5vw, 60px);
+      filter: drop-shadow(0 4px 14px rgba(0,0,0,0.85));
+      line-height: 1;
+    }
+
+    .combo-divider {
+      font-size: 26px;
+      font-weight: 900;
+      color: #f5b041;
+      text-shadow: 0 0 10px rgba(245, 176, 65, 0.5);
+    }
+
+    /* Timer Row */
+    .timer-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #countdown-track {
+      width: clamp(220px, 26vw, 340px);
+      height: 10px;
+      background: rgba(25, 18, 22, 0.95);
+      border: 1px solid #5d4037;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.8);
+    }
+
+    #countdown-fluid {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #2ed573, #f5b041);
+      transition: width 0.05s linear, background 0.2s ease;
+    }
+
+    #countdown-text {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 11px;
+      color: #f5b041;
+      text-shadow: 0 0 8px rgba(245, 176, 65, 0.6);
+      width: 48px;
+    }
+
+    /* Floating Announcement Callout */
+    #announcement {
+      position: absolute;
+      top: 22%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      font-family: 'Cinzel', serif;
+      font-size: clamp(34px, 4.8vw, 64px);
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: #ff3838;
+      text-shadow: 0 0 35px rgba(255, 56, 56, 0.95), 0 0 65px #000;
+      z-index: 60;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease, transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+    }
+
+    #announcement.pop {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.15);
+    }
+
+    /* FIXED, STATIC FIRST-PERSON TANTRIK HANDS */
+    .fixed-hand-anchor {
+      position: absolute;
+      bottom: -40px;
+      width: clamp(280px, 26vw, 420px);
+      height: clamp(370px, 35vw, 560px);
+      pointer-events: none;
+      z-index: 30;
+      filter: drop-shadow(0 0 30px rgba(245, 176, 65, 0.25));
+      transition: transform 0.15s ease-out;
+    }
+
+    .fixed-hand-anchor img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    #hand-left-anchor {
+      left: 0vw;
+    }
+
+    #hand-right-anchor {
+      right: 0vw;
+    }
+
+    #sprite-hand-right {
+      transform: scaleX(-1);
+    }
+
+    .hand-thrust {
+      animation: handThrustAnim 0.35s ease-out !important;
+    }
+
+    @keyframes handThrustAnim {
+      0% { transform: translateY(0); filter: drop-shadow(0 0 30px rgba(245, 176, 65, 0.25)); }
+      40% { transform: translateY(-30px) scale(1.05); filter: drop-shadow(0 0 45px #ffd32a); }
+      100% { transform: translateY(0); filter: drop-shadow(0 0 30px rgba(245, 176, 65, 0.25)); }
+    }
+
+    /* Gesture Pills over Hands */
+    .gesture-pill {
+      position: absolute;
+      top: -24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(14, 10, 16, 0.92);
+      border: 1px solid #8d6e63;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+    }
+
+    /* Picture-In-Picture Webcam Console in Top-Right Corner */
+    #webcam-console {
+      position: absolute;
+      top: 96px;
+      right: 36px;
+      width: 170px;
+      height: 115px;
+      background: rgba(10, 8, 12, 0.9);
+      border: 2px solid #5d4037;
+      border-radius: 10px;
+      overflow: hidden;
+      z-index: 70;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.95);
+      transition: opacity 0.3s ease;
+      backdrop-filter: blur(6px);
+    }
+
+    #webcam-feed {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    #skeleton-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1);
+    }
+
+    .console-tag {
+      position: absolute;
+      top: 5px;
+      left: 7px;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      color: #ff4757;
+      letter-spacing: 1px;
+    }
+
+    /* Top Controls Bar */
+    #top-controls {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      z-index: 80;
+    }
+
+    .btn-icon {
+      background: rgba(20, 15, 22, 0.88);
+      border: 1px solid #5d4037;
+      color: #f7f1e3;
+      padding: 7px 15px;
+      border-radius: 20px;
+      font-family: 'Cinzel', serif;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+      transition: all 0.2s ease;
+    }
+    .btn-icon:hover {
+      background: #3e2723;
+      border-color: var(--gold-primary);
+      transform: translateY(-2px);
+    }
+
+    /* Modals */
+    .screen-modal {
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 3, 7, 0.94);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      text-align: center;
+      backdrop-filter: blur(12px);
+    }
+
+    .modal-headline {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(38px, 4.6vw, 64px);
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: var(--gold-primary);
+      text-shadow: 0 0 35px var(--gold-glow);
+      margin-bottom: 12px;
+    }
+
+    .modal-description {
+      color: #d7ccc8;
+      font-size: clamp(14px, 1.4vw, 17px);
+      max-width: 640px;
+      line-height: 1.7;
+      margin-bottom: 30px;
+    }
+
+    .cards-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 14px;
+      max-width: 740px;
+      margin-bottom: 35px;
+    }
+
+    .mudra-tile {
+      background: rgba(26, 19, 24, 0.88);
+      border: 1px solid #4e342e;
+      border-radius: 10px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .mudra-tile span {
+      font-size: 28px;
+    }
+
+    .btn-engage {
+      background: linear-gradient(135deg, #d35400, #e67e22);
+      color: #fff;
+      border: none;
+      font-family: 'Cinzel', serif;
+      font-weight: 900;
+      font-size: clamp(16px, 1.6vw, 22px);
+      letter-spacing: 2px;
+      padding: 16px 48px;
+      border-radius: 40px;
+      cursor: pointer;
+      box-shadow: 0 8px 30px rgba(211, 84, 0, 0.6);
+      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .btn-engage:hover {
+      transform: translateY(-3px) scale(1.05);
+      box-shadow: 0 12px 40px rgba(230, 126, 34, 0.85);
+    }
+
+    #model-status {
+      margin-top: 18px;
+      font-size: 14px;
+      color: #f1c40f;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-viewport">
+    <div class="screen-vignette"></div>
+    <div id="damage-vignette"></div>
+
+    <div id="shake-stage">
+      <img id="cave-backdrop" src="assets/cave_bg.jpg" alt="Dark Cavern Background">
+      <canvas id="vfx-canvas"></canvas>
+
+      <!-- Daanav Boss Arena: PLANTED ON STONE GROUND -->
+      <div id="boss-layer">
+        <div id="boss-ground-shadow"></div>
+        <img id="boss-sprite" src="assets/daanav_idle.png" alt="Daanav Boss">
+      </div>
+
+      <!-- Tantrik Left Demonic Hand: FIXED & STATIC AT BOTTOM-LEFT -->
+      <div id="hand-left-anchor" class="fixed-hand-anchor">
+        <div class="gesture-pill">Left: <span id="pill-left-glyph">🖐</span></div>
+        <img id="sprite-hand-left" src="assets/hand_palm.png" alt="Left Hand">
+      </div>
+
+      <!-- Tantrik Right Demonic Hand: FIXED & STATIC AT BOTTOM-RIGHT -->
+      <div id="hand-right-anchor" class="fixed-hand-anchor">
+        <div class="gesture-pill">Right: <span id="pill-right-glyph">✊</span></div>
+        <img id="sprite-hand-right" src="assets/hand_fist.png" alt="Right Hand">
+      </div>
+    </div>
+
+    <!-- Top HUD / Health Bars -->
+    <div id="hud-top">
+      <div class="hud-card">
+        <div class="hud-title-row tantrik">
+          <span>TANTRIK</span>
+          <span id="tantrik-hp-counter">100</span>
+        </div>
+        <div class="bar-frame">
+          <div id="tantrik-hp-fill" class="bar-fluid tantrik" style="width: 100%;"></div>
+        </div>
+      </div>
+
+      <div class="hud-card">
+        <div class="hud-title-row daanav">
+          <span id="daanav-hp-counter">100</span>
+          <span>DAANAV 👹</span>
+        </div>
+        <div class="bar-frame">
+          <div id="daanav-hp-fill" class="bar-fluid daanav" style="width: 100%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Combo Target Dock: PURE EMOJI SYSTEM -->
+    <div id="combo-dock">
+      <div id="combo-capsule">
+        <span id="glyph-target-l" class="combo-emoji">🤘</span>
+        <span class="combo-divider">+</span>
+        <span id="glyph-target-r" class="combo-emoji">🖐</span>
+      </div>
+      <div class="timer-wrap">
+        <div id="countdown-track">
+          <div id="countdown-fluid"></div>
+        </div>
+        <div id="countdown-text">4.0s</div>
+      </div>
+    </div>
+
+    <!-- Announcement Callout -->
+    <div id="announcement">ENOUGH!</div>
+
+    <!-- Top Controls -->
+    <div id="top-controls">
+      <button id="btn-fullscreen" class="btn-icon">⛶ FULLSCREEN</button>
+      <button id="btn-toggle-cam" class="btn-icon">📷 TOGGLE CAM</button>
+    </div>
+
+    <!-- Picture In Picture Live Webcam -->
+    <div id="webcam-console">
+      <span class="console-tag">TRACKING</span>
+      <video id="webcam-feed" autoplay playsinline muted></video>
+      <canvas id="skeleton-canvas"></canvas>
+    </div>
+
+    <!-- Start / Tutorial Screen -->
+    <div id="modal-start" class="screen-modal">
+      <div class="modal-headline">DEMON SLAYER</div>
+      <div class="modal-description">
+        You are an arcane <strong>Tantrik</strong> warrior deep within the cursed temple caverns of <strong>Daanav</strong>.<br>
+        Form the requested two-hand Mudra combos with both hands in front of your camera before the countdown drains to channel divine spells!
+      </div>
+
+      <div class="cards-row">
+        <div class="mudra-tile"><span>🤘</span> Horns / Mudra</div>
+        <div class="mudra-tile"><span>🖐</span> Open Palm</div>
+        <div class="mudra-tile"><span>✊</span> Clenched Fist</div>
+        <div class="mudra-tile"><span>✌️</span> Victory / Peace</div>
+        <div class="mudra-tile"><span>☝️</span> Pointing Up</div>
+        <div class="mudra-tile"><span>👍</span> Thumbs Up</div>
+      </div>
+
+      <button id="btn-enter" class="btn-engage">COMMENCE RITUAL ⚔️</button>
+      <div id="model-status">Loading Google MediaPipe Vision Model...</div>
+    </div>
+
+    <!-- Game Over / Victory Modal -->
+    <div id="modal-gameover" class="screen-modal" style="display: none;">
+      <div id="gameover-header" class="modal-headline">VICTORY!</div>
+      <div id="gameover-body" class="modal-description">You banished the Daanav back to the Netherworld!</div>
+      <button id="btn-playagain" class="btn-engage">RESTART BATTLE 🔄</button>
+    </div>
+  </div>
+
+  <!-- MediaPipe Tasks Vision CDN -->
+  <script type="module">
+    import { GestureRecognizer, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+    // --- Audio Multi-Layer Synthesizer ---
+    class AudioOrchestrator {
+      constructor() {
+        this.ctx = null;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playSpellBurst() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const sub = this.ctx.createOscillator();
+        const subGain = this.ctx.createGain();
+        sub.type = "sine";
+        sub.frequency.setValueAtTime(140, now);
+        sub.frequency.exponentialRampToValueAtTime(32, now + 0.38);
+        subGain.gain.setValueAtTime(0.8, now);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+        sub.connect(subGain);
+        subGain.connect(this.ctx.destination);
+        sub.start(now);
+        sub.stop(now + 0.38);
+
+        const osc = this.ctx.createOscillator();
+        const oscGain = this.ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(380, now);
+        osc.frequency.exponentialRampToValueAtTime(1600, now + 0.28);
+        oscGain.gain.setValueAtTime(0.25, now);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
+        osc.connect(oscGain);
+        oscGain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.48);
+      }
+
+      playDemonRoar() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(170, now);
+        osc.frequency.linearRampToValueAtTime(42, now + 0.45);
+        gain.gain.setValueAtTime(0.6, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.5);
+      }
+
+      playHitImpact() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(90, now);
+        osc.frequency.exponentialRampToValueAtTime(22, now + 0.32);
+        gain.gain.setValueAtTime(0.9, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.36);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.36);
+      }
+    }
+
+    const audio = new AudioOrchestrator();
+
+    // --- Particle Engine: Sacred Holy Fire, Molten Embers, and Smoke ---
+    class ParticleEngine {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.particles = [];
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.initAmbientEmbers();
+      }
+
+      resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+      }
+
+      initAmbientEmbers() {
+        for (let i = 0; i < 40; i++) {
+          this.particles.push({
+            x: Math.random() * this.canvas.width,
+            y: Math.random() * this.canvas.height,
+            vx: (Math.random() - 0.5) * 0.7,
+            vy: -Math.random() * 1.6 - 0.4,
+            size: Math.random() * 3 + 1,
+            color: 'rgba(245, 176, 65, ',
+            alpha: Math.random() * 0.6 + 0.2,
+            life: Math.random() * 200,
+            maxLife: 200,
+            isEmber: true
+          });
+        }
+      }
+
+      burstSpell(x, y) {
+        // Fire & molten gold embers
+        for (let i = 0; i < 75; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 12 + 3;
+          const fireColors = ['rgba(255, 69, 0, ', 'rgba(255, 140, 0, ', 'rgba(245, 176, 65, ', 'rgba(255, 215, 0, '];
+          const color = fireColors[Math.floor(Math.random() * fireColors.length)];
+          this.particles.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - Math.random() * 2.5,
+            size: Math.random() * 6 + 2,
+            color: color,
+            alpha: 1,
+            life: 0,
+            maxLife: 35 + Math.random() * 25,
+            isSmoke: false
+          });
+        }
+
+        // Dark rising smoke puffs
+        for (let i = 0; i < 20; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 3 + 1;
+          this.particles.push({
+            x: x + (Math.random() - 0.5) * 30,
+            y: y + (Math.random() - 0.5) * 30,
+            vx: Math.cos(angle) * speed * 0.5,
+            vy: -Math.random() * 3 - 1,
+            size: Math.random() * 14 + 8,
+            color: 'rgba(25, 18, 16, ',
+            alpha: 0.5,
+            life: 0,
+            maxLife: 50 + Math.random() * 25,
+            isSmoke: true
+          });
+        }
+      }
+
+      update() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life++;
+
+          if (p.isEmber) {
+            p.alpha = 0.2 + Math.sin(p.life * 0.05) * 0.3;
+            if (p.y < -10) {
+              p.y = this.canvas.height + 10;
+              p.x = Math.random() * this.canvas.width;
+            }
+          } else if (p.isSmoke) {
+            p.size += 0.3;
+            p.alpha = 0.5 * (1 - (p.life / p.maxLife));
+            p.vx *= 0.96;
+            p.vy *= 0.97;
+            if (p.life >= p.maxLife) {
+              this.particles.splice(i, 1);
+              continue;
+            }
+          } else {
+            p.alpha = 1 - (p.life / p.maxLife);
+            p.vx *= 0.92;
+            p.vy *= 0.92;
+            p.vy += 0.12;
+            if (p.life >= p.maxLife) {
+              this.particles.splice(i, 1);
+              continue;
+            }
+          }
+
+          this.ctx.beginPath();
+          this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          this.ctx.fillStyle = p.color + Math.max(0, p.alpha) + ')';
+          if (!p.isSmoke) {
+            this.ctx.shadowBlur = 10;
+            this.ctx.shadowColor = p.color + '0.8)';
+          } else {
+            this.ctx.shadowBlur = 0;
+          }
+          this.ctx.fill();
+        }
+      }
+    }
+
+    const vfxCanvas = document.getElementById('vfx-canvas');
+    const vfx = new ParticleEngine(vfxCanvas);
+
+    // --- Gesture Mapping Dictionary ---
+    const GESTURE_MAP = {
+      "ILoveYou": "🤘",
+      "Open_Palm": "🖐",
+      "Closed_Fist": "✊",
+      "Victory": "✌️",
+      "Pointing_Up": "☝️",
+      "Thumb_Up": "👍"
+    };
+
+    const SPRITE_MAP = {
+      "🤘": "assets/hand_horns.png",
+      "🖐": "assets/hand_palm.png",
+      "✊": "assets/hand_fist.png",
+      "✌️": "assets/hand_victory.png",
+      "☝️": "assets/hand_point.png",
+      "👍": "assets/hand_thumb.png"
+    };
+
+    const MUDRA_POOL = ["🤘", "🖐", "✊", "✌️", "☝️", "👍"];
+
+    // Robust finger detection: returns Mudra emoji or null (never defaults to fist if uncertain)
+    function detectMudraFromLandmarks(lm, rawCategory) {
+      if (GESTURE_MAP[rawCategory]) {
+        return GESTURE_MAP[rawCategory];
+      }
+
+      // Height comparison: tip.y < pip.y means extended upwards
+      const indexExt = lm[8].y < lm[6].y;
+      const middleExt = lm[12].y < lm[10].y;
+      const ringExt = lm[16].y < lm[14].y;
+      const pinkyExt = lm[20].y < lm[18].y;
+      const thumbExt = lm[4].y < lm[3].y;
+
+      // 1. Rock Horns: Index & Pinky extended, Middle & Ring curled
+      if (indexExt && pinkyExt && !middleExt && !ringExt) return "🤘";
+      // 2. Victory: Index & Middle extended, Ring & Pinky curled
+      if (indexExt && middleExt && !ringExt && !pinkyExt) return "✌️";
+      // 3. Pointing: Index extended, Middle, Ring & Pinky curled
+      if (indexExt && !middleExt && !ringExt && !pinkyExt) return "☝️";
+      // 4. Clenched Fist or Thumbs Up
+      if (!indexExt && !middleExt && !ringExt && !pinkyExt) {
+        if (thumbExt && lm[4].y < lm[2].y - 0.04) return "👍";
+        return "✊";
+      }
+      // 5. Open Palm: 3 or 4 fingers extended
+      if (indexExt && middleExt && ringExt) return "🖐";
+
+      return null; // Return null so previous recognized pose is preserved
+    }
+
+    // --- Game State Variables ---
+    let recognizer = null;
+    let isRunning = false;
+    let tantrikHP = 100;
+    let daanavHP = 100;
+    let currentCombo = { left: "🤘", right: "🖐" };
+    let liveLeft = "🖐";
+    let liveRight = "✊";
+    
+    const INITIAL_TIME_LIMIT = 4000;
+    let countdownLimit = INITIAL_TIME_LIMIT;
+    let countdownRemaining = INITIAL_TIME_LIMIT;
+    let lastTime = performance.now();
+    let lastVideoTime = -1;
+    let matchHoldTimer = null;
+    const HOLD_REQUIRED = 120;
+
+    let shakeIntensity = 0;
+
+    // DOM Elements
+    const tantrikHpBar = document.getElementById("tantrik-hp-fill");
+    const tantrikHpText = document.getElementById("tantrik-hp-counter");
+    const daanavHpBar = document.getElementById("daanav-hp-fill");
+    const daanavHpText = document.getElementById("daanav-hp-counter");
+    const glyphL = document.getElementById("glyph-target-l");
+    const glyphR = document.getElementById("glyph-target-r");
+    const countdownFluid = document.getElementById("countdown-fluid");
+    const countdownText = document.getElementById("countdown-text");
+    const comboCapsule = document.getElementById("combo-capsule");
+    const announcement = document.getElementById("announcement");
+    const bossSprite = document.getElementById("boss-sprite");
+    const damageVignette = document.getElementById("damage-vignette");
+    const shakeStage = document.getElementById("shake-stage");
+    const pillLeftGlyph = document.getElementById("pill-left-glyph");
+    const pillRightGlyph = document.getElementById("pill-right-glyph");
+    const spriteHandLeft = document.getElementById("sprite-hand-left");
+    const spriteHandRight = document.getElementById("sprite-hand-right");
+    const handLeftAnchor = document.getElementById("hand-left-anchor");
+    const handRightAnchor = document.getElementById("hand-right-anchor");
+    const modalStart = document.getElementById("modal-start");
+    const modalGameOver = document.getElementById("modal-gameover");
+    const gameoverHeader = document.getElementById("gameover-header");
+    const gameoverBody = document.getElementById("gameover-body");
+    const modelStatus = document.getElementById("model-status");
+    const btnEnter = document.getElementById("btn-enter");
+    const btnPlayAgain = document.getElementById("btn-playagain");
+    const btnFullscreen = document.getElementById("btn-fullscreen");
+    const btnToggleCam = document.getElementById("btn-toggle-cam");
+    const webcamConsole = document.getElementById("webcam-console");
+    const video = document.getElementById("webcam-feed");
+    const skeletonCanvas = document.getElementById("skeleton-canvas");
+    const skCtx = skeletonCanvas.getContext("2d");
+
+    // --- Initialize MediaPipe Gesture Recognizer ---
+    async function setupVision() {
+      try {
+        modelStatus.innerText = "Initializing Vision Neural Pipeline...";
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+        modelStatus.innerText = "Loading Hand Landmark & Mudra Classifier...";
+        recognizer = await GestureRecognizer.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
+          },
+          numHands: 2,
+          runningMode: "VIDEO"
+        });
+        modelStatus.innerText = "✓ Vision Ready! Click Commence Ritual.";
+        modelStatus.style.color = "#2ed573";
+      } catch (err) {
+        console.error("MediaPipe initialization error:", err);
+        modelStatus.innerText = "Running in Keyboard Simulation Mode (Camera offline).";
+        modelStatus.style.color = "#eccc68";
+      }
+    }
+
+    // --- Webcam Capture Setup (Bulletproof Playback) ---
+    async function bootWebcam() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: "user"
+          }
+        });
+        video.srcObject = stream;
+        await video.play();
+        skeletonCanvas.width = video.videoWidth || 640;
+        skeletonCanvas.height = video.videoHeight || 480;
+      } catch (e) {
+        console.error("Camera permission error:", e);
+      }
+    }
+
+    // --- Pick Next Combo & Reset Timer ---
+    function rollNewCombo() {
+      const l = MUDRA_POOL[Math.floor(Math.random() * MUDRA_POOL.length)];
+      const r = MUDRA_POOL[Math.floor(Math.random() * MUDRA_POOL.length)];
+      currentCombo = { left: l, right: r };
+      glyphL.innerText = l;
+      glyphR.innerText = r;
+      comboCapsule.classList.remove("match-glow");
+      
+      countdownLimit = Math.max(2600, INITIAL_TIME_LIMIT - (100 - daanavHP) * 10);
+      countdownRemaining = countdownLimit;
+      countdownFluid.style.width = "100%";
+      countdownFluid.style.background = "linear-gradient(90deg, #2ed573, #f5b041)";
+      countdownText.innerText = (countdownRemaining / 1000).toFixed(1) + "s";
+      matchHoldTimer = null;
+    }
+
+    function flashText(msg, color = "#ff3838") {
+      announcement.innerText = msg;
+      announcement.style.color = color;
+      announcement.classList.add("pop");
+      setTimeout(() => announcement.classList.remove("pop"), 550);
+    }
+
+    function triggerShake(intensity = 15) {
+      shakeIntensity = intensity;
+    }
+
+    // --- Player Casts Spell ---
+    function executeSpell() {
+      audio.playSpellBurst();
+      flashText("DIVINE MUDRA! ⚡", "#ffd32a");
+      triggerShake(20);
+
+      // Subtle stationary hand thrust
+      handLeftAnchor.classList.add("hand-thrust");
+      handRightAnchor.classList.add("hand-thrust");
+      setTimeout(() => {
+        handLeftAnchor.classList.remove("hand-thrust");
+        handRightAnchor.classList.remove("hand-thrust");
+      }, 350);
+
+      // Fire & Molten Ember Blast at Demon
+      const rect = bossSprite.getBoundingClientRect();
+      vfx.burstSpell(rect.left + rect.width / 2, rect.top + rect.height / 2);
+
+      // Boss Hurt State & Recoil
+      bossSprite.src = "assets/daanav_hurt.png";
+      bossSprite.classList.add("boss-flinch");
+      setTimeout(() => {
+        bossSprite.src = "assets/daanav_idle.png";
+        bossSprite.classList.remove("boss-flinch");
+      }, 450);
+
+      daanavHP = Math.max(0, daanavHP - 25);
+      daanavHpBar.style.width = daanavHP + "%";
+      daanavHpText.innerText = daanavHP;
+
+      if (daanavHP <= 0) {
+        resolveMatch(true);
+      } else {
+        rollNewCombo();
+      }
+    }
+
+    // --- Demon Attacks Player ---
+    function executeDemonStrike() {
+      audio.playDemonRoar();
+      audio.playHitImpact();
+      triggerShake(25);
+
+      const taunts = ["ENOUGH!", "STOP!", "FOOLISH MORTAL!"];
+      flashText(taunts[Math.floor(Math.random() * taunts.length)], "#ff3838");
+
+      // Boss Attack State & Lunge
+      bossSprite.src = "assets/daanav_attack.png";
+      bossSprite.classList.add("boss-lunge");
+      damageVignette.classList.add("active");
+      setTimeout(() => {
+        bossSprite.src = "assets/daanav_idle.png";
+        bossSprite.classList.remove("boss-lunge");
+        damageVignette.classList.remove("active");
+      }, 550);
+
+      tantrikHP = Math.max(0, tantrikHP - 25);
+      tantrikHpBar.style.width = tantrikHP + "%";
+      tantrikHpText.innerText = tantrikHP;
+
+      if (tantrikHP <= 0) {
+        resolveMatch(false);
+      } else {
+        rollNewCombo();
+      }
+    }
+
+    // --- Game Over / Victory ---
+    function resolveMatch(isVictorious) {
+      isRunning = false;
+      modalGameOver.style.display = "flex";
+      if (isVictorious) {
+        gameoverHeader.innerText = "DAANAV BANISHED! 👑";
+        gameoverHeader.style.color = "#2ed573";
+        gameoverBody.innerText = "Your mastery of the sacred mudras shattered the dark entity!";
+      } else {
+        gameoverHeader.innerText = "SOUL CONSUMED 💀";
+        gameoverHeader.style.color = "#ff4757";
+        gameoverBody.innerText = "The Daanav proved too swift. The temple cavern claims another victim.";
+      }
+    }
+
+    function rebootFight() {
+      tantrikHP = 100;
+      daanavHP = 100;
+      tantrikHpBar.style.width = "100%";
+      tantrikHpText.innerText = "100";
+      daanavHpBar.style.width = "100%";
+      daanavHpText.innerText = "100";
+      modalGameOver.style.display = "none";
+      isRunning = true;
+      rollNewCombo();
+    }
+
+    // --- Update Demonic Hands (Fixed In Place, Clean Sprite Swap) ---
+    function setHandVisuals(lEmoji, rEmoji) {
+      if (lEmoji && SPRITE_MAP[lEmoji]) {
+        spriteHandLeft.src = SPRITE_MAP[lEmoji];
+        pillLeftGlyph.innerText = lEmoji;
+      }
+      if (rEmoji && SPRITE_MAP[rEmoji]) {
+        spriteHandRight.src = SPRITE_MAP[rEmoji];
+        pillRightGlyph.innerText = rEmoji;
+      }
+    }
+
+    // --- Main 60 FPS Engine Loop ---
+    function engineLoop(timestamp) {
+      const dt = timestamp - lastTime;
+      lastTime = timestamp;
+
+      // Update Screen Shake with decay
+      if (shakeIntensity > 0) {
+        const sx = (Math.random() - 0.5) * shakeIntensity;
+        const sy = (Math.random() - 0.5) * shakeIntensity;
+        shakeStage.style.transform = `translate3d(${sx}px, ${sy}px, 0)`;
+        shakeIntensity *= 0.88;
+        if (shakeIntensity < 0.5) shakeIntensity = 0;
+      } else {
+        shakeStage.style.transform = `translate3d(0, 0, 0)`;
+      }
+
+      // Update Particles
+      vfx.update();
+
+      if (isRunning) {
+        // Countdown timer tick
+        countdownRemaining -= dt;
+        const pct = Math.max(0, countdownRemaining / countdownLimit);
+        countdownFluid.style.width = (pct * 100) + "%";
+        countdownText.innerText = Math.max(0, countdownRemaining / 1000).toFixed(1) + "s";
+
+        if (countdownRemaining < 1500) {
+          countdownFluid.style.background = "linear-gradient(90deg, #ff5e57, #ff3838)";
+          countdownText.style.color = "#ff4757";
+        } else {
+          countdownFluid.style.background = "linear-gradient(90deg, #2ed573, #f5b041)";
+          countdownText.style.color = "#f5b041";
+        }
+
+        if (countdownRemaining <= 0) {
+          executeDemonStrike();
+        }
+
+        // --- Camera Recognition Loop (Protected with Timestamp Check & Try-Catch) ---
+        if (recognizer && video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+          lastVideoTime = video.currentTime;
+          try {
+            const results = recognizer.recognizeForVideo(video, timestamp);
+            skCtx.clearRect(0, 0, skeletonCanvas.width, skeletonCanvas.height);
+
+            if (results.landmarks && results.landmarks.length > 0) {
+              const drawer = new DrawingUtils(skCtx);
+              const detected = [];
+
+              for (let i = 0; i < results.landmarks.length; i++) {
+                const lm = results.landmarks[i];
+                const rawCategory = results.gestures[i]?.[0]?.categoryName || "";
+                
+                // Draw skeleton in PIP
+                drawer.drawConnectors(lm, GestureRecognizer.HAND_CONNECTIONS, { color: "#f5b041", lineWidth: 2 });
+                drawer.drawLandmarks(lm, { color: "#eb3b5a", lineWidth: 1.5 });
+
+                const mudra = detectMudraFromLandmarks(lm, rawCategory);
+                const screenX = 1 - lm[0].x; // Mirrored coordinate: 0 is left, 1 is right
+                detected.push({ screenX, mudra });
+              }
+
+              let leftDetected = null;
+              let rightDetected = null;
+
+              if (detected.length === 1) {
+                if (detected[0].screenX < 0.5) leftDetected = detected[0].mudra;
+                else rightDetected = detected[0].mudra;
+              } else if (detected.length >= 2) {
+                detected.sort((a, b) => a.screenX - b.screenX);
+                leftDetected = detected[0].mudra;
+                rightDetected = detected[1].mudra;
+              }
+
+              // Update only when a clear mudra is detected, preserving state otherwise
+              if (leftDetected) liveLeft = leftDetected;
+              if (rightDetected) liveRight = rightDetected;
+
+              setHandVisuals(liveLeft, liveRight);
+            }
+          } catch (camErr) {
+            // Silently recover if frame was skipped by browser
+          }
+        }
+
+        // --- Check Combo Alignment ---
+        const isMatched = (liveLeft === currentCombo.left && liveRight === currentCombo.right);
+        if (isMatched) {
+          comboCapsule.classList.add("match-glow");
+          if (!matchHoldTimer) matchHoldTimer = timestamp;
+          if (timestamp - matchHoldTimer >= HOLD_REQUIRED) {
+            executeSpell();
+          }
+        } else {
+          comboCapsule.classList.remove("match-glow");
+          matchHoldTimer = null;
+        }
+      }
+
+      requestAnimationFrame(engineLoop);
+    }
+
+    // --- Keyboard Simulation Controls ---
+    window.addEventListener("keydown", (e) => {
+      audio.init();
+      const leftKeys = { '1': '🤘', '2': '🖐', '3': '✊', '4': '✌️', '5': '☝️', '6': '👍' };
+      const rightKeys = { '7': '🤘', '8': '🖐', '9': '✊', '0': '✌️', '-': '☝️', '=': '👍' };
+
+      if (leftKeys[e.key]) {
+        liveLeft = leftKeys[e.key];
+        setHandVisuals(liveLeft, liveRight);
+      }
+      if (rightKeys[e.key]) {
+        liveRight = rightKeys[e.key];
+        setHandVisuals(liveLeft, liveRight);
+      }
+      if (e.code === "Space" && !isRunning) {
+        rebootFight();
+      }
+    });
+
+    // --- Buttons & Handlers ---
+    btnEnter.addEventListener("click", async () => {
+      audio.init();
+      await bootWebcam();
+      modalStart.style.display = "none";
+      rebootFight();
+    });
+
+    btnPlayAgain.addEventListener("click", () => {
+      audio.init();
+      rebootFight();
+    });
+
+    btnFullscreen.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+
+    btnToggleCam.addEventListener("click", () => {
+      if (webcamConsole.style.opacity === "0") {
+        webcamConsole.style.opacity = "1";
+        webcamConsole.style.pointerEvents = "auto";
+      } else {
+        webcamConsole.style.opacity = "0";
+        webcamConsole.style.pointerEvents = "none";
+      }
+    });
+
+    // Start Vision & Engine
+    setupVision();
+    requestAnimationFrame(engineLoop);
+  </script>
+</body>
+</html>
