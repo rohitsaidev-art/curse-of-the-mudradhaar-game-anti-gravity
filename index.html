@@ -497,6 +497,44 @@
       backdrop-filter: blur(12px);
     }
 
+    #modal-gameover {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    #modal-gameover.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    @keyframes bossBanishing {
+      0% { filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.5)); transform: scale(1); opacity: 1; }
+      40% { filter: drop-shadow(0 0 50px rgba(255, 215, 0, 0.95)) brightness(1.7); transform: scale(1.08) translateY(-12px); opacity: 0.95; }
+      80% { filter: drop-shadow(0 0 70px rgba(255, 255, 255, 1)) brightness(2.4); transform: scale(0.9) translateY(15px); opacity: 0.4; }
+      100% { filter: drop-shadow(0 0 90px rgba(255, 255, 255, 1)) brightness(3); transform: scale(0.7) translateY(30px); opacity: 0; }
+    }
+    .boss-banishing {
+      animation: bossBanishing 3.4s forwards ease-in-out;
+    }
+
+    @keyframes bossTriumph {
+      0% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(0,0,0,0.8)); }
+      50% { transform: scale(1.14) translateY(-18px); filter: drop-shadow(0 0 40px rgba(235, 59, 90, 0.95)); }
+      100% { transform: scale(1.08) translateY(-10px); filter: drop-shadow(0 0 35px rgba(235, 59, 90, 0.85)); }
+    }
+    .boss-triumph {
+      animation: bossTriumph 4s forwards ease-in-out;
+    }
+
+    @keyframes handVictoryGlow {
+      0% { filter: drop-shadow(0 0 10px rgba(245, 176, 65, 0.4)); }
+      50% { filter: drop-shadow(0 0 40px rgba(245, 176, 65, 1)) brightness(1.25); }
+      100% { filter: drop-shadow(0 0 25px rgba(245, 176, 65, 0.6)); }
+    }
+    .hand-victory-glow {
+      animation: handVictoryGlow 2.5s infinite alternate ease-in-out;
+    }
+
     .modal-headline {
       font-family: 'Cinzel', serif;
       font-size: clamp(38px, 4.6vw, 64px);
@@ -686,32 +724,177 @@
   <script type="module">
     import { GestureRecognizer, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
-    // --- Central Background Music Manager ---
+    // --- Central Background Music & Audio Manager ---
     class BackgroundMusicManager {
       constructor() {
-        this.musicVolume = 0.55; // Configurable music volume
-        this.currentTrack = null; // 'tantrik' | 'rakshasa' | null
-        this.isPaused = false;
-        this.fadeInterval = null;
-        this.hasUserInteracted = false;
+        this.musicVolume = 0.55;   // Independent music volume
+        this.voiceVolume = 0.85;   // Independent voice volume
+        this.stingerVolume = 0.75; // Independent stinger volume
 
+        this.currentTrack = null;  // 'tantrik' | 'rakshasa' | null
+        this.currentVoice = null;  // { key, audio, priority, onEnded }
+        this.currentStinger = null;
+        this.dialogueQueue = [];
+        this.activeOutcome = null; // 'victory' | 'defeat' | null
+
+        this.isPaused = false;
+        this.isDucked = false;
+        this.fadeInterval = null;
+        this.duckInterval = null;
+        this.hasUserInteracted = false;
+        this.hasWebAudio = false;
+
+        // BGM Tracks
         this.tracks = {
           tantrik: new Audio("assets/tantrik_bell.mp3"),
           rakshasa: new Audio("assets/rakshasa_rite.mp3")
         };
-
         for (const key in this.tracks) {
           const a = this.tracks[key];
           a.loop = true;
           a.preload = "auto";
           a.volume = 0;
         }
+
+        // Character Voiceovers
+        this.voices = {
+          // Rakshasa
+          demon_1st: new Audio("assets/demon_1st_dialogue.mp3"),
+          demon_angry: new Audio("assets/demon_first_angry.mp3"),
+          demon_attacked: new Audio("assets/demon_got_attacked.mp3"),
+          demon_attacking: new Audio("assets/demon_attacking.mp3"),
+          demon_defeat: new Audio("assets/demon_defeat.mp3"),
+          demon_victory: new Audio("assets/demon_victory.mp3"),
+
+          // Tantrik
+          tantric_1st: new Audio("assets/tantric_1st_dialogue.mp3"),
+          tantric_victory: new Audio("assets/tantric_victory.mp3"),
+          tantric_defeat: new Audio("assets/tantric_defeat.mp3"),
+          tantric_attacked: new Audio("assets/tantric_got_attacked.mp3")
+        };
+        for (const key in this.voices) {
+          const v = this.voices[key];
+          v.preload = "auto";
+          v.loop = false;
+        }
+
+        // Result Musical Stingers
+        this.stingers = {
+          victory: new Audio("assets/stinger_victory.mp3"),
+          defeat: new Audio("assets/stinger_defeat.mp3")
+        };
+        for (const key in this.stingers) {
+          const s = this.stingers[key];
+          s.preload = "auto";
+          s.loop = false;
+        }
+
+        this.sfxVolume = 0.70; // Independent SFX volume
+
+        // Gameplay Sound Effects
+        this.sfx = {
+          sparkle_seal: new Audio("assets/mixkit-magic-sparkle-poof-hit-3082.wav"),
+          fireball: new Audio("assets/mixkit-fireball-spell-1347.wav"),
+          punch_impact: new Audio("assets/mixkit-impact-of-a-strong-punch-2155.mp3"),
+          choir_shine: new Audio("assets/mixkit-choir-magic-shine-658.wav"),
+          rakshasa_grunt: new Audio("assets/Rakshasa_Grunt_Cleaned.mp3")
+        };
+        for (const key in this.sfx) {
+          const s = this.sfx[key];
+          s.preload = "auto";
+          s.loop = false;
+        }
+
+        // SFX Relative Balance Gain Map
+        this.sfxGainMap = {
+          sparkle_seal: 0.85,
+          fireball: 0.80,
+          punch_impact: 0.70,   // Balanced so it doesn't overpower the voice line
+          choir_shine: 0.75,
+          rakshasa_grunt: 0.80
+        };
+
+        this.lastSfxTimes = {};
+
+        // Calibrated perceived loudness gains (avoids clipping, balances quiet vs loud takes)
+        this.gainMap = {
+          demon_1st: 1.15,
+          demon_angry: 0.95,
+          demon_attacked: 0.85,
+          demon_defeat: 0.95,
+          demon_victory: 1.0,
+          demon_attacking: 0.95,
+
+          tantric_1st: 1.45,
+          tantric_victory: 0.95,
+          tantric_defeat: 1.0,
+          tantric_attacked: 1.45
+        };
+
+        // Trim leading silence map (non-destructive; preserves source files)
+        this.trimStartMap = {
+          demon_attacking: 0.28
+        };
       }
 
-      init() {
+      init(ctx = null) {
         this.hasUserInteracted = true;
+        if (ctx) {
+          this.attachWebAudioReverb(ctx);
+        }
       }
 
+      attachWebAudioReverb(ctx) {
+        if (!ctx || this.hasWebAudio) return;
+        try {
+          this.ctx = ctx;
+          this.convolver = ctx.createConvolver();
+          this.convolver.buffer = this._buildCavernImpulse(ctx);
+          this.convolver.connect(ctx.destination);
+
+          const demonKeys = ["demon_1st", "demon_angry", "demon_attacked", "demon_attacking", "demon_defeat", "demon_victory"];
+          demonKeys.forEach(k => {
+            const audioEl = this.voices[k];
+            if (!audioEl) return;
+            try {
+              const src = ctx.createMediaElementSource(audioEl);
+              // Dry path (main voice presence)
+              const dryGain = ctx.createGain();
+              dryGain.gain.value = 0.92;
+              src.connect(dryGain);
+              dryGain.connect(ctx.destination);
+
+              // Wet path (subtle cavern reverb)
+              const wetGain = ctx.createGain();
+              wetGain.gain.value = 0.22;
+              src.connect(wetGain);
+              wetGain.connect(this.convolver);
+            } catch (err) {
+              // Gracefully fall back to standard element playback
+            }
+          });
+          this.hasWebAudio = true;
+        } catch (e) {
+          console.warn("Web Audio cavern reverb skipped:", e);
+        }
+      }
+
+      _buildCavernImpulse(ctx, duration = 1.4, decay = 2.8) {
+        const rate = ctx.sampleRate;
+        const length = Math.floor(rate * duration);
+        const impulse = ctx.createBuffer(2, length, rate);
+        const left = impulse.getChannelData(0);
+        const right = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+          const n = i / length;
+          const env = Math.exp(-n * decay);
+          left[i] = (Math.random() * 2 - 1) * env * 0.4;
+          right[i] = (Math.random() * 2 - 1) * env * 0.4;
+        }
+        return impulse;
+      }
+
+      // --- Music Playback & Non-Overlapping Crossfades ---
       play(trackKey, fadeDuration = 1200) {
         if (!this.hasUserInteracted) return;
         const incomingAudio = this.tracks[trackKey];
@@ -726,7 +909,6 @@
 
         const outgoingAudio = this.currentTrack ? this.tracks[this.currentTrack] : null;
 
-        // Never play both simultaneously: fade out outgoing before fading in incoming
         if (outgoingAudio && outgoingAudio !== incomingAudio && !outgoingAudio.paused) {
           const halfFade = fadeDuration / 2;
           const steps = 15;
@@ -753,7 +935,6 @@
       }
 
       _fadeIn(trackKey, audio, duration) {
-        // Enforce strict non-overlap: guarantee all other tracks are immediately stopped
         for (const key in this.tracks) {
           if (key !== trackKey) {
             this.tracks[key].pause();
@@ -771,11 +952,12 @@
             const steps = 20;
             const stepTime = duration / steps;
             let step = 0;
+            const target = this.isDucked ? (this.musicVolume * 0.22) : this.musicVolume;
 
             this.fadeInterval = setInterval(() => {
               step++;
               const factor = Math.min(1, step / steps);
-              audio.volume = this.musicVolume * factor;
+              audio.volume = target * factor;
               if (step >= steps) {
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
@@ -818,27 +1000,325 @@
         }, stepTime);
       }
 
+      // --- Music Ducking & Volume Restoration ---
+      duckMusic(fadeTime = 300) {
+        if (this.isDucked) return;
+        this.isDucked = true;
+        this._fadeMusicTo(this.musicVolume * 0.22, fadeTime);
+      }
+
+      unduckMusic(fadeTime = 400) {
+        if (!this.isDucked) return;
+        this.isDucked = false;
+        if (this.currentTrack && !this.activeOutcome) {
+          this._fadeMusicTo(this.musicVolume, fadeTime);
+        }
+      }
+
+      _fadeMusicTo(targetVol, duration) {
+        const active = this.currentTrack ? this.tracks[this.currentTrack] : null;
+        if (!active || active.paused || this.isPaused) return;
+
+        if (this.duckInterval) {
+          clearInterval(this.duckInterval);
+          this.duckInterval = null;
+        }
+
+        const steps = 12;
+        const stepTime = duration / steps;
+        const startVol = active.volume;
+        let step = 0;
+
+        this.duckInterval = setInterval(() => {
+          step++;
+          const factor = Math.min(1, step / steps);
+          active.volume = startVol + (targetVol - startVol) * factor;
+          if (step >= steps) {
+            clearInterval(this.duckInterval);
+            this.duckInterval = null;
+          }
+        }, stepTime);
+      }
+
+      // --- Character Dialogue Playback, Priority & Queue ---
+      playDialogue(voiceKey, priority = 0, onEnded = null) {
+        if (!this.hasUserInteracted) return;
+        const audio = this.voices[voiceKey];
+        if (!audio) {
+          if (onEnded) onEnded();
+          return;
+        }
+
+        // Outcome priority (1) cancels normal ongoing dialogues and clears queue
+        if (priority === 1) {
+          this.dialogueQueue = [];
+          if (this.currentVoice && this.currentVoice.priority < 1) {
+            this._stopVoice(this.currentVoice.audio);
+            this.currentVoice = null;
+          }
+        }
+
+        if (this.currentVoice) {
+          if (priority > this.currentVoice.priority) {
+            this._stopVoice(this.currentVoice.audio);
+            this.currentVoice = null;
+            this._startVoice(voiceKey, priority, onEnded);
+          } else {
+            this.dialogueQueue.push({ key: voiceKey, priority, onEnded });
+          }
+          return;
+        }
+
+        this._startVoice(voiceKey, priority, onEnded);
+      }
+
+      _startVoice(voiceKey, priority, onEnded) {
+        const audio = this.voices[voiceKey];
+        if (!audio) {
+          if (onEnded) onEnded();
+          this._processNextInQueue();
+          return;
+        }
+
+        for (const k in this.voices) {
+          if (k !== voiceKey && !this.voices[k].paused) {
+            this._stopVoice(this.voices[k]);
+          }
+        }
+
+        this.duckMusic();
+
+        const gain = this.gainMap[voiceKey] || 1.0;
+        audio.volume = Math.min(1.0, this.voiceVolume * gain);
+
+        const startSeek = this.trimStartMap[voiceKey] || 0;
+        try {
+          audio.currentTime = startSeek;
+        } catch (_) {}
+
+        this.currentVoice = { key: voiceKey, audio, priority, onEnded };
+
+        const handleEnded = () => {
+          audio.removeEventListener("ended", handleEnded);
+          audio.removeEventListener("error", handleError);
+          if (this.currentVoice && this.currentVoice.audio === audio) {
+            const cb = this.currentVoice.onEnded;
+            this.currentVoice = null;
+            if (cb) cb();
+            this._processNextInQueue();
+          }
+        };
+
+        const handleError = (e) => {
+          console.warn("Dialogue playback error for", voiceKey, e);
+          handleEnded();
+        };
+
+        audio.addEventListener("ended", handleEnded);
+        audio.addEventListener("error", handleError);
+
+        const p = audio.play();
+        if (p !== undefined) {
+          p.catch(err => {
+            console.warn("Dialogue play prevented:", err);
+            handleEnded();
+          });
+        }
+      }
+
+      _stopVoice(audio) {
+        if (!audio) return;
+        try {
+          audio.pause();
+          audio.currentTime = 0;
+        } catch (_) {}
+      }
+
+      _processNextInQueue() {
+        if (this.dialogueQueue.length > 0) {
+          const next = this.dialogueQueue.shift();
+          this._startVoice(next.key, next.priority, next.onEnded);
+        } else {
+          this.unduckMusic();
+        }
+      }
+
+      // --- Result Stinger Playback (Played Once, Fade-In, No Looping) ---
+      playStinger(stingerKey, fadeDuration = 1000) {
+        if (this.currentStinger) {
+          this._stopVoice(this.currentStinger);
+          this.currentStinger = null;
+        }
+
+        const stinger = this.stingers[stingerKey];
+        if (!stinger) return;
+
+        stinger.loop = false;
+        stinger.currentTime = 0;
+        stinger.volume = 0;
+        this.currentStinger = stinger;
+
+        const p = stinger.play();
+        if (p !== undefined) {
+          p.then(() => {
+            const steps = 16;
+            const stepTime = fadeDuration / steps;
+            let step = 0;
+            const targetVol = this.stingerVolume;
+            const timer = setInterval(() => {
+              step++;
+              stinger.volume = (step / steps) * targetVol;
+              if (step >= steps) clearInterval(timer);
+            }, stepTime);
+          }).catch(err => console.warn("Stinger play prevented:", err));
+        }
+      }
+
+      // --- State Transitions & Sequences ---
+      playEncounterIntro(onComplete) {
+        this.activeOutcome = null;
+        this.stopAllDialogue(false);
+
+        // Sequence: Rakshasa 1st dialogue -> Tantrik 1st dialogue -> Gameplay begins
+        this.playDialogue("demon_1st", 0, () => {
+          this.playDialogue("tantric_1st", 0, () => {
+            if (onComplete) onComplete();
+          });
+        });
+      }
+
+      triggerVictoryOutcome(onDemonDefeatEnd = null, onTantrikVictoryEnd = null) {
+        if (this.activeOutcome) return;
+        this.activeOutcome = "victory";
+        this.stopAllDialogue(true); // Clear non-outcome queues
+
+        // Sequence: demon_defeat -> tantric_victory -> victory stinger
+        this.playDialogue("demon_defeat", 1, () => {
+          if (onDemonDefeatEnd) onDemonDefeatEnd();
+          this.playDialogue("tantric_victory", 1, () => {
+            if (onTantrikVictoryEnd) onTantrikVictoryEnd();
+            this.playStinger("victory", 1200);
+          });
+        });
+      }
+
+      triggerDefeatOutcome(onTantrikDefeatEnd = null, onDemonVictoryEnd = null) {
+        if (this.activeOutcome) return;
+        this.activeOutcome = "defeat";
+        this.stopAllDialogue(true); // Clear non-outcome queues
+
+        // Sequence: tantric_defeat -> demon_victory -> defeat stinger
+        this.playDialogue("tantric_defeat", 1, () => {
+          if (onTantrikDefeatEnd) onTantrikDefeatEnd();
+          this.playDialogue("demon_victory", 1, () => {
+            if (onDemonVictoryEnd) onDemonVictoryEnd();
+            this.playStinger("defeat", 1200);
+          });
+        });
+      }
+
+      // --- Sound Effects (SFX) Playback & Management ---
+      playSFX(sfxKey, volumeMult = 1.0) {
+        if (!this.hasUserInteracted) return;
+        const sound = this.sfx[sfxKey];
+        if (!sound) return;
+
+        // Prevent rapid duplicate overlapping triggers of identical SFX within 120ms
+        const now = performance.now();
+        if (this.lastSfxTimes[sfxKey] && (now - this.lastSfxTimes[sfxKey] < 120)) {
+          return;
+        }
+        this.lastSfxTimes[sfxKey] = now;
+
+        try {
+          sound.currentTime = 0;
+          const gain = this.sfxGainMap[sfxKey] || 1.0;
+          sound.volume = Math.min(1.0, this.sfxVolume * gain * volumeMult);
+          const p = sound.play();
+          if (p !== undefined) {
+            p.catch(() => {});
+          }
+        } catch (_) {}
+      }
+
+      stopAllSFX() {
+        for (const key in this.sfx) {
+          const s = this.sfx[key];
+          try {
+            s.pause();
+            s.currentTime = 0;
+          } catch (_) {}
+        }
+      }
+
+      stopAllDialogue(keepStingers = false) {
+        this.dialogueQueue = [];
+        if (this.currentVoice) {
+          this._stopVoice(this.currentVoice.audio);
+          this.currentVoice = null;
+        }
+        for (const k in this.voices) {
+          this._stopVoice(this.voices[k]);
+        }
+        if (!keepStingers && this.currentStinger) {
+          this._stopVoice(this.currentStinger);
+          this.currentStinger = null;
+        }
+        this.stopAllSFX();
+        this.unduckMusic(200);
+      }
+
       pause() {
         const active = this.currentTrack ? this.tracks[this.currentTrack] : null;
         if (active && !active.paused) {
           active.pause();
-          this.isPaused = true;
         }
+        if (this.currentVoice && this.currentVoice.audio && !this.currentVoice.audio.paused) {
+          this.currentVoice.audio.pause();
+        }
+        if (this.currentStinger && !this.currentStinger.paused) {
+          this.currentStinger.pause();
+        }
+        for (const k in this.sfx) {
+          if (!this.sfx[k].paused) {
+            this.sfx[k].pause();
+          }
+        }
+        this.isPaused = true;
       }
 
       resume() {
+        if (!this.isPaused) return;
+        this.isPaused = false;
         const active = this.currentTrack ? this.tracks[this.currentTrack] : null;
-        if (active && this.isPaused) {
+        if (active && active.paused && !this.activeOutcome) {
           active.play().catch(e => console.warn(e));
-          this.isPaused = false;
+        }
+        if (this.currentVoice && this.currentVoice.audio && this.currentVoice.audio.paused) {
+          this.currentVoice.audio.play().catch(e => console.warn(e));
+        }
+        if (this.currentStinger && this.currentStinger.paused) {
+          this.currentStinger.play().catch(e => console.warn(e));
         }
       }
 
       setVolume(val) {
+        this.setMusicVolume(val);
+      }
+
+      setMusicVolume(val) {
         this.musicVolume = Math.max(0, Math.min(1, val));
-        if (this.currentTrack && !this.isPaused) {
+        if (this.currentTrack && !this.isPaused && !this.isDucked) {
           this.tracks[this.currentTrack].volume = this.musicVolume;
         }
+      }
+
+      setVoiceVolume(val) {
+        this.voiceVolume = Math.max(0, Math.min(1, val));
+      }
+
+      setSFXVolume(val) {
+        this.sfxVolume = Math.max(0, Math.min(1, val));
       }
     }
 
@@ -1101,13 +1581,16 @@
     let recognizer = null;
     let isRunning = false;
     let isPaused = false;
+    let hasPlayedFirstAngry = false;
     let tantrikHP = 100;
     let daanavHP = 100;
     let currentCombo = { left: "🤘", right: "🖐" };
     let liveLeft = "🖐";
     let liveRight = "✊";
     
-    const INITIAL_TIME_LIMIT = 4000;
+    const INITIAL_TIME_LIMIT = 4200;
+    const SPELL_DAMAGE = 14;  // ~7-8 successful mudras to banish Daanav (extends game length)
+    const DEMON_DAMAGE = 16;  // ~6-7 failed rounds to defeat
     let countdownLimit = INITIAL_TIME_LIMIT;
     let countdownRemaining = INITIAL_TIME_LIMIT;
     let lastTime = performance.now();
@@ -1155,7 +1638,7 @@
     // --- Autoplay Friendly First Interaction Handler ---
     function handleFirstUserInteraction() {
       audio.init();
-      musicManager.init();
+      musicManager.init(audio.ctx);
       if (!isRunning && modalStart.style.display !== "none") {
         musicManager.play("tantrik", 1200);
       }
@@ -1167,7 +1650,7 @@
 
     // --- Pause / Resume Controller ---
     function togglePause() {
-      if (!isRunning || modalGameOver.style.display === "flex") return;
+      if (modalStart.style.display !== "none" || modalGameOver.style.display === "flex") return;
       isPaused = !isPaused;
       if (isPaused) {
         musicManager.pause();
@@ -1238,7 +1721,7 @@
       glyphR.innerText = r;
       comboCapsule.classList.remove("match-glow");
       
-      countdownLimit = Math.max(2600, INITIAL_TIME_LIMIT - (100 - daanavHP) * 10);
+      countdownLimit = Math.max(2800, INITIAL_TIME_LIMIT - (100 - daanavHP) * 8);
       countdownRemaining = countdownLimit;
       countdownFluid.style.width = "100%";
       countdownFluid.style.background = "linear-gradient(90deg, #2ed573, #f5b041)";
@@ -1246,11 +1729,12 @@
       matchHoldTimer = null;
     }
 
-    function flashText(msg, color = "#ff3838") {
+    function flashText(msg, color = "#ff3838", duration = 550) {
       announcement.innerText = msg;
       announcement.style.color = color;
       announcement.classList.add("pop");
-      setTimeout(() => announcement.classList.remove("pop"), 550);
+      if (announcement._clearTimeout) clearTimeout(announcement._clearTimeout);
+      announcement._clearTimeout = setTimeout(() => announcement.classList.remove("pop"), duration);
     }
 
     function triggerShake(intensity = 15) {
@@ -1259,8 +1743,10 @@
 
     // --- Player Casts Spell ---
     function executeSpell() {
+      // 1. Mudra recognition & seal activation magic sparkle SFX
+      musicManager.playSFX("sparkle_seal");
       audio.playSpellBurst();
-      flashText("DIVINE MUDRA! ⚡", "#ffd32a");
+      flashText("DIVINE MUDRA! ⚡", "#ffd32a", 800);
       triggerShake(20);
 
       // Subtle stationary hand thrust
@@ -1279,41 +1765,70 @@
       bossSprite.src = "assets/daanav_hurt.png";
       bossSprite.classList.add("boss-flinch");
       setTimeout(() => {
-        bossSprite.src = "assets/daanav_idle.png";
+        if (daanavHP > 0) bossSprite.src = "assets/daanav_idle.png";
         bossSprite.classList.remove("boss-flinch");
       }, 450);
 
-      daanavHP = Math.max(0, daanavHP - 25);
+      daanavHP = Math.max(0, daanavHP - SPELL_DAMAGE);
       daanavHpBar.style.width = daanavHP + "%";
       daanavHpText.innerText = daanavHP;
 
       if (daanavHP <= 0) {
         resolveMatch(true);
       } else {
+        // Trigger Rakshasa reaction: voice line OR alternative non-verbal grunt
+        if (!hasPlayedFirstAngry) {
+          hasPlayedFirstAngry = true;
+          musicManager.playDialogue("demon_angry", 0);
+        } else if (daanavHP <= 50 && (daanavHP + SPELL_DAMAGE) > 50) {
+          // Milestone dialogue line
+          musicManager.playDialogue("demon_attacked", 0);
+        } else {
+          // Voice line not used for this damage event: play non-verbal grunt
+          // (Only if no dialogue is currently speaking, never layering over dialogue)
+          if (!musicManager.currentVoice) {
+            musicManager.playSFX("rakshasa_grunt");
+          }
+        }
         rollNewCombo();
       }
     }
 
     // --- Demon Attacks Player ---
     function executeDemonStrike() {
+      // 1. Supernatural fireball attack SFX synchronized with attack animation
+      musicManager.playSFX("fireball");
       audio.playDemonRoar();
-      audio.playHitImpact();
       triggerShake(25);
 
+      // Rakshasa launches major attack voice -> Tantrik got attacked voice follows on impact
+      musicManager.playDialogue("demon_attacking", 0, () => {
+        if (tantrikHP > 0 && isRunning) {
+          musicManager.playDialogue("tantric_attacked", 0);
+        }
+      });
+
       const taunts = ["ENOUGH!", "STOP!", "FOOLISH MORTAL!"];
-      flashText(taunts[Math.floor(Math.random() * taunts.length)], "#ff3838");
+      flashText(taunts[Math.floor(Math.random() * taunts.length)], "#ff3838", 900);
 
       // Boss Attack State & Lunge
       bossSprite.src = "assets/daanav_attack.png";
       bossSprite.classList.add("boss-lunge");
       damageVignette.classList.add("active");
+
+      // Physical punch impact sound when the strike connects with Tantrik
+      setTimeout(() => {
+        musicManager.playSFX("punch_impact");
+        audio.playHitImpact();
+      }, 140);
+
       setTimeout(() => {
         bossSprite.src = "assets/daanav_idle.png";
         bossSprite.classList.remove("boss-lunge");
         damageVignette.classList.remove("active");
-      }, 550);
+      }, 650);
 
-      tantrikHP = Math.max(0, tantrikHP - 25);
+      tantrikHP = Math.max(0, tantrikHP - DEMON_DAMAGE);
       tantrikHpBar.style.width = tantrikHP + "%";
       tantrikHpText.innerText = tantrikHP;
 
@@ -1326,17 +1841,71 @@
 
     // --- Game Over / Victory ---
     function resolveMatch(isVictorious) {
+      if (!isRunning && modalGameOver.classList.contains("visible")) return;
       isRunning = false;
-      musicManager.fadeOut(1200);
-      modalGameOver.style.display = "flex";
+      musicManager.fadeOut(1400);
+
       if (isVictorious) {
-        gameoverHeader.innerText = "DAANAV BANISHED! 👑";
-        gameoverHeader.style.color = "#2ed573";
-        gameoverBody.innerText = "Your mastery of the sacred mudras shattered the dark entity!";
+        // --- PHASE 1: Rakshasa Banishing Collapse & Scream (matches demon_defeat.mp3) ---
+        bossSprite.src = "assets/daanav_hurt.png";
+        bossSprite.classList.add("boss-banishing");
+        triggerShake(30);
+        flashText("THE DAANAV SHATTERS! ⚡", "#ffd32a", 3100);
+
+        // Radiant holy particles burst across the demon's body
+        const rect = bossSprite.getBoundingClientRect();
+        for (let i = 0; i < 5; i++) {
+          setTimeout(() => {
+            vfx.burstSpell(rect.left + rect.width / 2 + (Math.random() - 0.5) * 80, rect.top + rect.height / 2 + (Math.random() - 0.5) * 80);
+          }, i * 400);
+        }
+
+        // Sequential Voice & Visual Transition matching voiceovers
+        musicManager.triggerVictoryOutcome(
+          // Phase 2: Demon defeat ends -> Tantrik victory begins:
+          () => {
+            // Major ritual culmination: divine choir magic shine SFX!
+            musicManager.playSFX("choir_shine");
+            flashText("SACRED RITUAL COMPLETE! 🕉️", "#2ed573", 4200);
+            handLeftAnchor.classList.add("hand-victory-glow");
+            handRightAnchor.classList.add("hand-victory-glow");
+          },
+          // Phase 3: Tantrik victory ends -> Victory stinger plays & modal fades in:
+          () => {
+            gameoverHeader.innerText = "DAANAV BANISHED! 👑";
+            gameoverHeader.style.color = "#2ed573";
+            gameoverBody.innerText = "Your mastery of the sacred mudras shattered the dark entity!";
+            modalGameOver.style.display = "flex";
+            void modalGameOver.offsetWidth;
+            modalGameOver.classList.add("visible");
+          }
+        );
+
       } else {
-        gameoverHeader.innerText = "SOUL CONSUMED 💀";
-        gameoverHeader.style.color = "#ff4757";
-        gameoverBody.innerText = "The Daanav proved too swift. The temple cavern claims another victim.";
+        // --- PHASE 1: Tantrik Overpowered & Collapse (matches tantric_defeat.mp3) ---
+        damageVignette.classList.add("active");
+        damageVignette.style.opacity = "0.9";
+        triggerShake(22);
+        flashText("THE RITUAL COLLAPSES... 💀", "#ff4757", 1100);
+
+        // Sequential Voice & Visual Transition matching voiceovers
+        musicManager.triggerDefeatOutcome(
+          // Phase 2: Tantrik defeat ends -> Demon victory triumph begins:
+          () => {
+            bossSprite.src = "assets/daanav_attack.png";
+            bossSprite.classList.add("boss-triumph");
+            flashText("DAANAV: 'YOUR SOUL IS MINE!' 👹", "#ff3838", 5200);
+          },
+          // Phase 3: Demon victory ends -> Defeat stinger plays & modal fades in:
+          () => {
+            gameoverHeader.innerText = "SOUL CONSUMED 💀";
+            gameoverHeader.style.color = "#ff4757";
+            gameoverBody.innerText = "The Daanav proved too swift. The temple cavern claims another victim.";
+            modalGameOver.style.display = "flex";
+            void modalGameOver.offsetWidth;
+            modalGameOver.classList.add("visible");
+          }
+        );
       }
     }
 
@@ -1347,10 +1916,22 @@
       tantrikHpText.innerText = "100";
       daanavHpBar.style.width = "100%";
       daanavHpText.innerText = "100";
+      modalGameOver.classList.remove("visible");
       modalGameOver.style.display = "none";
+      bossSprite.classList.remove("boss-banishing", "boss-triumph");
+      bossSprite.src = "assets/daanav_idle.png";
+      bossSprite.style.opacity = "1";
+      bossSprite.style.transform = "scale(1)";
+      damageVignette.classList.remove("active");
+      damageVignette.style.opacity = "";
+      handLeftAnchor.classList.remove("hand-victory-glow");
+      handRightAnchor.classList.remove("hand-victory-glow");
       isRunning = true;
       isPaused = false;
-      musicManager.play("rakshasa", 1200);
+      hasPlayedFirstAngry = false;
+      musicManager.activeOutcome = null;
+      musicManager.stopAllDialogue(false);
+      musicManager.play("rakshasa", 1000);
       rollNewCombo();
     }
 
@@ -1493,7 +2074,7 @@
         liveRight = rightKeys[e.key];
         setHandVisuals(liveLeft, liveRight);
       }
-      if (e.code === "Space" && !isRunning && modalGameOver.style.display === "flex") {
+      if (e.code === "Space" && !isRunning && modalGameOver.classList.contains("visible")) {
         rebootFight();
       }
     });
@@ -1501,10 +2082,36 @@
     // --- Buttons & Handlers ---
     btnEnter.addEventListener("click", async () => {
       audio.init();
-      musicManager.init();
+      musicManager.init(audio.ctx);
       await bootWebcam();
       modalStart.style.display = "none";
-      rebootFight();
+
+      // Smoothly transition BGM to Rakshasa's Rite
+      musicManager.play("rakshasa", 1200);
+
+      // Phase 1: Rakshasa Appearance & 1st Dialogue
+      bossSprite.src = "assets/daanav_idle.png";
+      bossSprite.style.transform = "scale(1.05)";
+      flashText("DAANAV: 'Who dares awaken me?!' 👹", "#ff4757", 4500);
+
+      musicManager.playDialogue("demon_1st", 0, () => {
+        // Phase 2: Tantrik Answers
+        bossSprite.style.transform = "scale(1)";
+        handLeftAnchor.classList.add("hand-victory-glow");
+        handRightAnchor.classList.add("hand-victory-glow");
+        flashText("TANTRIK: 'The sacred Mudras shall banish you!' 🕉️", "#ffd32a", 3800);
+
+        musicManager.playDialogue("tantric_1st", 0, () => {
+          handLeftAnchor.classList.remove("hand-victory-glow");
+          handRightAnchor.classList.remove("hand-victory-glow");
+
+          // Phase 3: Transition to active battle
+          flashText("COMMENCE THE RITUAL! ⚔️", "#2ed573", 1000);
+          setTimeout(() => {
+            rebootFight();
+          }, 800);
+        });
+      });
     });
 
     btnPlayAgain.addEventListener("click", () => {
@@ -1514,10 +2121,21 @@
 
     btnTitle.addEventListener("click", () => {
       audio.init();
+      modalGameOver.classList.remove("visible");
       modalGameOver.style.display = "none";
       modalStart.style.display = "flex";
+      bossSprite.classList.remove("boss-banishing", "boss-triumph");
+      bossSprite.src = "assets/daanav_idle.png";
+      bossSprite.style.opacity = "1";
+      bossSprite.style.transform = "scale(1)";
+      damageVignette.classList.remove("active");
+      damageVignette.style.opacity = "";
+      handLeftAnchor.classList.remove("hand-victory-glow");
+      handRightAnchor.classList.remove("hand-victory-glow");
       isRunning = false;
       isPaused = false;
+      hasPlayedFirstAngry = false;
+      musicManager.stopAllDialogue(false);
       musicManager.play("tantrik", 1200);
     });
 
