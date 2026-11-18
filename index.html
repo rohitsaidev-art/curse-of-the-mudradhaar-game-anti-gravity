@@ -675,13 +675,174 @@
     <div id="modal-gameover" class="screen-modal" style="display: none;">
       <div id="gameover-header" class="modal-headline">VICTORY!</div>
       <div id="gameover-body" class="modal-description">You banished the Daanav back to the Netherworld!</div>
-      <button id="btn-playagain" class="btn-engage">RESTART BATTLE 🔄</button>
+      <div style="display: flex; gap: 14px; margin-top: 10px;">
+        <button id="btn-playagain" class="btn-engage">RESTART BATTLE 🔄</button>
+        <button id="btn-title" class="btn-icon" style="font-size: 14px; padding: 12px 24px; border-radius: 40px;">TITLE SCREEN 🏛️</button>
+      </div>
     </div>
   </div>
 
   <!-- MediaPipe Tasks Vision CDN -->
   <script type="module">
     import { GestureRecognizer, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+    // --- Central Background Music Manager ---
+    class BackgroundMusicManager {
+      constructor() {
+        this.musicVolume = 0.55; // Configurable music volume
+        this.currentTrack = null; // 'tantrik' | 'rakshasa' | null
+        this.isPaused = false;
+        this.fadeInterval = null;
+        this.hasUserInteracted = false;
+
+        this.tracks = {
+          tantrik: new Audio("assets/tantrik_bell.mp3"),
+          rakshasa: new Audio("assets/rakshasa_rite.mp3")
+        };
+
+        for (const key in this.tracks) {
+          const a = this.tracks[key];
+          a.loop = true;
+          a.preload = "auto";
+          a.volume = 0;
+        }
+      }
+
+      init() {
+        this.hasUserInteracted = true;
+      }
+
+      play(trackKey, fadeDuration = 1200) {
+        if (!this.hasUserInteracted) return;
+        const incomingAudio = this.tracks[trackKey];
+        if (!incomingAudio) return;
+
+        if (this.currentTrack === trackKey && !this.isPaused && !incomingAudio.paused) return;
+
+        if (this.fadeInterval) {
+          clearInterval(this.fadeInterval);
+          this.fadeInterval = null;
+        }
+
+        const outgoingAudio = this.currentTrack ? this.tracks[this.currentTrack] : null;
+
+        // Never play both simultaneously: fade out outgoing before fading in incoming
+        if (outgoingAudio && outgoingAudio !== incomingAudio && !outgoingAudio.paused) {
+          const halfFade = fadeDuration / 2;
+          const steps = 15;
+          const stepTime = halfFade / steps;
+          const startVol = outgoingAudio.volume;
+          let step = 0;
+
+          this.fadeInterval = setInterval(() => {
+            step++;
+            const factor = Math.max(0, 1 - step / steps);
+            outgoingAudio.volume = startVol * factor;
+
+            if (step >= steps) {
+              clearInterval(this.fadeInterval);
+              this.fadeInterval = null;
+              outgoingAudio.pause();
+              outgoingAudio.currentTime = 0;
+              this._fadeIn(trackKey, incomingAudio, halfFade);
+            }
+          }, stepTime);
+        } else {
+          this._fadeIn(trackKey, incomingAudio, fadeDuration);
+        }
+      }
+
+      _fadeIn(trackKey, audio, duration) {
+        // Enforce strict non-overlap: guarantee all other tracks are immediately stopped
+        for (const key in this.tracks) {
+          if (key !== trackKey) {
+            this.tracks[key].pause();
+            this.tracks[key].currentTime = 0;
+            this.tracks[key].volume = 0;
+          }
+        }
+        this.currentTrack = trackKey;
+        this.isPaused = false;
+        audio.volume = 0;
+
+        const p = audio.play();
+        if (p !== undefined) {
+          p.then(() => {
+            const steps = 20;
+            const stepTime = duration / steps;
+            let step = 0;
+
+            this.fadeInterval = setInterval(() => {
+              step++;
+              const factor = Math.min(1, step / steps);
+              audio.volume = this.musicVolume * factor;
+              if (step >= steps) {
+                clearInterval(this.fadeInterval);
+                this.fadeInterval = null;
+              }
+            }, stepTime);
+          }).catch(err => {
+            console.warn("Audio play prevented:", err);
+          });
+        }
+      }
+
+      fadeOut(duration = 1000) {
+        if (this.fadeInterval) {
+          clearInterval(this.fadeInterval);
+          this.fadeInterval = null;
+        }
+        const active = this.currentTrack ? this.tracks[this.currentTrack] : null;
+        if (!active || active.paused) {
+          this.currentTrack = null;
+          return;
+        }
+
+        const steps = 18;
+        const stepTime = duration / steps;
+        const startVol = active.volume;
+        let step = 0;
+
+        this.fadeInterval = setInterval(() => {
+          step++;
+          const factor = Math.max(0, 1 - step / steps);
+          active.volume = startVol * factor;
+
+          if (step >= steps) {
+            clearInterval(this.fadeInterval);
+            this.fadeInterval = null;
+            active.pause();
+            active.currentTime = 0;
+            this.currentTrack = null;
+          }
+        }, stepTime);
+      }
+
+      pause() {
+        const active = this.currentTrack ? this.tracks[this.currentTrack] : null;
+        if (active && !active.paused) {
+          active.pause();
+          this.isPaused = true;
+        }
+      }
+
+      resume() {
+        const active = this.currentTrack ? this.tracks[this.currentTrack] : null;
+        if (active && this.isPaused) {
+          active.play().catch(e => console.warn(e));
+          this.isPaused = false;
+        }
+      }
+
+      setVolume(val) {
+        this.musicVolume = Math.max(0, Math.min(1, val));
+        if (this.currentTrack && !this.isPaused) {
+          this.tracks[this.currentTrack].volume = this.musicVolume;
+        }
+      }
+    }
+
+    const musicManager = new BackgroundMusicManager();
 
     // --- Audio Multi-Layer Synthesizer ---
     class AudioOrchestrator {
@@ -939,6 +1100,7 @@
     // --- Game State Variables ---
     let recognizer = null;
     let isRunning = false;
+    let isPaused = false;
     let tantrikHP = 100;
     let daanavHP = 100;
     let currentCombo = { left: "🤘", right: "🖐" };
@@ -982,12 +1144,47 @@
     const modelStatus = document.getElementById("model-status");
     const btnEnter = document.getElementById("btn-enter");
     const btnPlayAgain = document.getElementById("btn-playagain");
+    const btnTitle = document.getElementById("btn-title");
     const btnFullscreen = document.getElementById("btn-fullscreen");
     const btnToggleCam = document.getElementById("btn-toggle-cam");
     const webcamConsole = document.getElementById("webcam-console");
     const video = document.getElementById("webcam-feed");
     const skeletonCanvas = document.getElementById("skeleton-canvas");
     const skCtx = skeletonCanvas.getContext("2d");
+
+    // --- Autoplay Friendly First Interaction Handler ---
+    function handleFirstUserInteraction() {
+      audio.init();
+      musicManager.init();
+      if (!isRunning && modalStart.style.display !== "none") {
+        musicManager.play("tantrik", 1200);
+      }
+      window.removeEventListener("pointerdown", handleFirstUserInteraction);
+      window.removeEventListener("keydown", handleFirstUserInteraction);
+    }
+    window.addEventListener("pointerdown", handleFirstUserInteraction);
+    window.addEventListener("keydown", handleFirstUserInteraction);
+
+    // --- Pause / Resume Controller ---
+    function togglePause() {
+      if (!isRunning || modalGameOver.style.display === "flex") return;
+      isPaused = !isPaused;
+      if (isPaused) {
+        musicManager.pause();
+        announcement.innerText = "PAUSED";
+        announcement.style.color = "#f5b041";
+        announcement.classList.add("pop");
+      } else {
+        musicManager.resume();
+        announcement.classList.remove("pop");
+      }
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && isRunning && !isPaused) {
+        togglePause();
+      }
+    });
 
     // --- Initialize MediaPipe Gesture Recognizer ---
     async function setupVision() {
@@ -1130,6 +1327,7 @@
     // --- Game Over / Victory ---
     function resolveMatch(isVictorious) {
       isRunning = false;
+      musicManager.fadeOut(1200);
       modalGameOver.style.display = "flex";
       if (isVictorious) {
         gameoverHeader.innerText = "DAANAV BANISHED! 👑";
@@ -1151,6 +1349,8 @@
       daanavHpText.innerText = "100";
       modalGameOver.style.display = "none";
       isRunning = true;
+      isPaused = false;
+      musicManager.play("rakshasa", 1200);
       rollNewCombo();
     }
 
@@ -1168,6 +1368,11 @@
 
     // --- Main 60 FPS Engine Loop ---
     function engineLoop(timestamp) {
+      if (isPaused) {
+        lastTime = timestamp;
+        requestAnimationFrame(engineLoop);
+        return;
+      }
       const dt = timestamp - lastTime;
       lastTime = timestamp;
 
@@ -1271,6 +1476,12 @@
     // --- Keyboard Simulation Controls ---
     window.addEventListener("keydown", (e) => {
       audio.init();
+
+      if (e.key === "p" || e.key === "P" || e.key === "Escape") {
+        togglePause();
+        return;
+      }
+
       const leftKeys = { '1': '🤘', '2': '🖐', '3': '✊', '4': '✌️', '5': '☝️', '6': '👍' };
       const rightKeys = { '7': '🤘', '8': '🖐', '9': '✊', '0': '✌️', '-': '☝️', '=': '👍' };
 
@@ -1282,7 +1493,7 @@
         liveRight = rightKeys[e.key];
         setHandVisuals(liveLeft, liveRight);
       }
-      if (e.code === "Space" && !isRunning) {
+      if (e.code === "Space" && !isRunning && modalGameOver.style.display === "flex") {
         rebootFight();
       }
     });
@@ -1290,6 +1501,7 @@
     // --- Buttons & Handlers ---
     btnEnter.addEventListener("click", async () => {
       audio.init();
+      musicManager.init();
       await bootWebcam();
       modalStart.style.display = "none";
       rebootFight();
@@ -1298,6 +1510,15 @@
     btnPlayAgain.addEventListener("click", () => {
       audio.init();
       rebootFight();
+    });
+
+    btnTitle.addEventListener("click", () => {
+      audio.init();
+      modalGameOver.style.display = "none";
+      modalStart.style.display = "flex";
+      isRunning = false;
+      isPaused = false;
+      musicManager.play("tantrik", 1200);
     });
 
     btnFullscreen.addEventListener("click", () => {
